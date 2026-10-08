@@ -17,6 +17,7 @@ public partial class Main : Control
 	private HSlider _volumeSlider = null!;
 	private Label _volumeValue = null!;
 	private float _masterVolume = 0.8f;
+	private GameplayScreen _gameplay = null!;
 
 	private enum Screen
 	{
@@ -30,6 +31,11 @@ public partial class Main : Control
 		LoadSettings();
 		ApplyMasterVolume();
 
+		const string gameplaySettingsPath = "res://appsettings.json";
+		if (FileAccess.FileExists(gameplaySettingsPath))
+		{
+			GameplaySettings.Load(FileAccess.GetFileAsString(gameplaySettingsPath));
+		}
 		_pageMargin = new MarginContainer();
 		_pageMargin.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		_pageMargin.AddThemeConstantOverride("margin_left", 56);
@@ -51,7 +57,7 @@ public partial class Main : Control
 			return;
 		}
 
-		if (_currentScreen is Screen.Options or Screen.Play)
+		if (_currentScreen == Screen.Options)
 		{
 			ShowMainMenu();
 			GetViewport().SetInputAsHandled();
@@ -60,6 +66,13 @@ public partial class Main : Control
 
 	private void ShowMainMenu()
 	{
+		if (_gameplay != null)
+		{
+			RemoveChild(_gameplay);
+			_gameplay.QueueFree();
+			_gameplay = null;
+		}
+		_pageMargin.Visible = true;
 		_currentScreen = Screen.MainMenu;
 		ClearPage();
 		AddHeader("A LITTLE WORLD IN MOTION");
@@ -71,7 +84,7 @@ public partial class Main : Control
 		AddSpacer(copy, 16);
 
 		var play = CreateButton("PLAY", true);
-		play.Pressed += ShowPlayPlaceholder;
+		play.Pressed += StartGameplay;
 		copy.AddChild(play);
 
 		var options = CreateButton("OPTIONS");
@@ -134,24 +147,14 @@ public partial class Main : Control
 		_volumeSlider.GrabFocus();
 	}
 
-	private void ShowPlayPlaceholder()
+	private void StartGameplay()
 	{
 		_currentScreen = Screen.Play;
-		ClearPage();
-		AddHeader("PLAY");
-
-		var body = CreateBody();
-		var copy = CreateCopyColumn(body);
-		AddTitle(copy, "THE FIRST\nTURN", 42);
-		AddLabel(copy, "GAMEPLAY ENTRY POINT", 14, Mint);
-		AddLabel(copy, "No level is connected yet. This is a temporary\ndestination until the first stage is built.", 17, Muted);
-
-		var back = CreateButton("RETURN TO MENU", true);
-		back.Pressed += ShowMainMenu;
-		copy.AddChild(back);
-		AddArtwork(body);
-		AddFooter("ESC  RETURN TO MENU");
-		back.GrabFocus();
+		_pageMargin.Visible = false;
+		_gameplay = new GameplayScreen();
+		_gameplay.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+		_gameplay.ReturnToMenuRequested += ShowMainMenu;
+		AddChild(_gameplay);
 	}
 
 	private void ClearPage()
