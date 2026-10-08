@@ -8,5 +8,8 @@ obj/
 *.csproj.user
 *.sln.docstates
 
+# Exported builds
+/build/
+
 # IDE-local generated files
 .vs/
