@@ -1,6 +1,10 @@
 # KururinNext
 Spiritual successor to Kuru Kuru Kururin, built with Godot .NET and C#.
 
+## Run the project
+
+Open this folder's `project.godot` with Godot 4.7.2 .NET. The C# project targets .NET 8.0 and uses Godot's matching 4.7.2 .NET SDK package. To build from a terminal with the .NET SDK installed, run `dotnet build KururinNext.csproj` from this folder. To launch the main scene headlessly for a smoke check, run `godot --headless --path . --quit-after 3` from this folder (or replace `godot` with the path to your Godot .NET console executable). In the editor, press F6/F5 or use the Run Project button to see the startup screen.
+
 ## Development prompts
 
 Run these workspace prompts in order from Copilot Chat (type `/` and choose the prompt). Each prompt is one incremental implementation task:

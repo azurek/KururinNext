@@ -1,0 +1,14 @@
+; Engine configuration file.
+; KururinNext is built with Godot 4.7.2 .NET.
+
+config_version=5
+
+[application]
+
+config/name="KururinNext"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#")
+
+[dotnet]
+
+project/assembly_name="KururinNext"

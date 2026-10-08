@@ -1,0 +1,12 @@
+# Godot-generated editor and import data
+.godot/
+
+# .NET build output
+bin/
+obj/
+.mono/
+*.csproj.user
+*.sln.docstates
+
+# IDE-local generated files
+.vs/
