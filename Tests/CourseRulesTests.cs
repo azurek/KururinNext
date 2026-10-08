@@ -123,4 +123,62 @@ public class CourseRulesTests
 		Assert.True(CourseRules.RotorFitsThroughGate(0f, 51f, 7f, 40f, 32f));
 		Assert.False(CourseRules.RotorFitsThroughGate(0f, 51f, 7f, 40f, 34f));
 	}
+
+	[Fact]
+	public void FreshProgressUnlocksOnlyTheFirstImplementedStage()
+	{
+		var progress = ProgressionState.CreateNew();
+		var firstStage = WorldStageCatalog.FindStage("world-01-stage-01");
+		var nextStage = WorldStageCatalog.FindStage("world-01-stage-02")!;
+
+		Assert.NotNull(firstStage);
+		Assert.NotNull(nextStage);
+		Assert.True(progress.IsUnlocked(firstStage));
+		Assert.False(progress.IsUnlocked(nextStage));
+		Assert.False(progress.IsCompleted(firstStage));
+	}
+
+	[Fact]
+	public void CompletingStageUnlocksNextAndSurvivesSerialization()
+	{
+		var progress = ProgressionState.CreateNew();
+		var firstStage = WorldStageCatalog.FirstStage;
+		var nextStage = WorldStageCatalog.FindStage("world-01-stage-02")!;
+
+		Assert.True(progress.CompleteStage(firstStage.Id));
+		Assert.True(progress.IsCompleted(firstStage));
+		Assert.True(progress.IsUnlocked(nextStage));
+
+		var restored = ProgressionState.Load(progress.ToJson());
+		Assert.True(restored.IsCompleted(firstStage));
+		Assert.True(restored.IsUnlocked(nextStage));
+	}
+
+	[Fact]
+	public void SecondStageIsPlayableAfterFirstStageCompletion()
+	{
+		var progress = ProgressionState.CreateNew();
+		var firstStage = WorldStageCatalog.FirstStage;
+		var secondStage = WorldStageCatalog.FindStage("world-01-stage-02")!;
+
+		Assert.False(progress.IsUnlocked(secondStage));
+		Assert.True(progress.CompleteStage(firstStage.Id));
+		Assert.True(progress.IsUnlocked(secondStage));
+		Assert.True(secondStage.IsImplemented);
+		Assert.Equal("course-02", secondStage.LevelDataId);
+	}
+
+	[Theory]
+	[InlineData("not json")]
+	[InlineData("{\"version\":0,\"completedStageIds\":[\"world-01-stage-01\"]}")]
+	[InlineData("{\"version\":999,\"completedStageIds\":[\"world-01-stage-01\"]}")]
+	public void MalformedOrUnsupportedProgressStartsFresh(string json)
+	{
+		var progress = ProgressionState.Load(json);
+		var firstStage = WorldStageCatalog.FirstStage;
+		var nextStage = WorldStageCatalog.FindStage("world-01-stage-02")!;
+
+		Assert.False(progress.IsCompleted(firstStage));
+		Assert.False(progress.IsUnlocked(nextStage));
+	}
 }
