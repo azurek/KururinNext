@@ -18,17 +18,22 @@ public partial class GameplayScreen : Control
 	private bool _finished;
 	private bool _failed;
 	private bool _failurePending;
+	private bool _isPlaytest;
+	private LevelDefinition _playtestLevel;
 	private float _failureDelay;
 	private float _messageTime;
 	private StageDefinition _stage = WorldStageCatalog.FirstStage;
 
 	public event Action ReturnToMenuRequested;
 	public event Action StageSelectRequested;
+	public event Action ReturnToEditorRequested;
 	public event Action<string> StageCompleted;
 
-	public void Configure(StageDefinition stage)
+	public void Configure(StageDefinition stage, LevelDefinition playtestLevel = null, bool isPlaytest = false)
 	{
 		_stage = stage;
+		_playtestLevel = playtestLevel;
+		_isPlaytest = isPlaytest;
 	}
 
 	public override void _Ready()
@@ -36,7 +41,7 @@ public partial class GameplayScreen : Control
 		ProcessMode = ProcessModeEnum.Always;
 		MouseFilter = MouseFilterEnum.Stop;
 		_world = new CourseWorld { Name = "CourseWorld", ProcessMode = ProcessModeEnum.Pausable };
-		_world.Configure(_stage.LevelDataId);
+		_world.Configure(_stage.LevelDataId, _playtestLevel);
 		AddChild(_world);
 		_world.HitWall += OnHitWall;
 		_world.CheckpointReached += OnCheckpointReached;
@@ -193,7 +198,10 @@ public partial class GameplayScreen : Control
 		}
 		_runState.Complete();
 		_finished = true;
-		StageCompleted?.Invoke(_stage.Id);
+		if (!_isPlaytest)
+		{
+			StageCompleted?.Invoke(_stage.Id);
+		}
 		_paused = true;
 		GetTree().Paused = true;
 		ShowOverlay("COURSE COMPLETE", $"Final time: {FormatTime(_runState.ElapsedSeconds)}", MakeFinishButtons);
@@ -277,11 +285,18 @@ public partial class GameplayScreen : Control
 			SetMessage("BACK IN THE COURSE", Mint);
 			SetPaused(false);
 		});
-		AddOverlayButton(content, "RETURN TO MENU", ReturnToMenu);
+		AddOverlayButton(content, _isPlaytest ? "RETURN TO EDITOR" : "RETURN TO MENU",
+			_isPlaytest ? ReturnToEditor : ReturnToMenu);
 	}
 
 	private void MakeFinishButtons(VBoxContainer content)
 	{
+		if (_isPlaytest)
+		{
+			var returnToEditor = AddOverlayButton(content, "RETURN TO EDITOR", ReturnToEditor);
+			returnToEditor.GrabFocus();
+			return;
+		}
 		var returnButton = AddOverlayButton(content, "STAGE SELECT", ReturnToStageSelect);
 		returnButton.GrabFocus();
 	}
@@ -290,7 +305,8 @@ public partial class GameplayScreen : Control
 	{
 		var restartButton = AddOverlayButton(content, "RESTART LEVEL", RestartLevel);
 		restartButton.GrabFocus();
-		AddOverlayButton(content, "RETURN TO MENU", ReturnToMenu);
+		AddOverlayButton(content, _isPlaytest ? "RETURN TO EDITOR" : "RETURN TO MENU",
+			_isPlaytest ? ReturnToEditor : ReturnToMenu);
 	}
 
 	private void RestartLevel()
@@ -323,6 +339,12 @@ public partial class GameplayScreen : Control
 	{
 		GetTree().Paused = false;
 		ReturnToMenuRequested?.Invoke();
+	}
+
+	private void ReturnToEditor()
+	{
+		GetTree().Paused = false;
+		ReturnToEditorRequested?.Invoke();
 	}
 
 	private void ReturnToStageSelect()

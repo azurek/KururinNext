@@ -19,6 +19,7 @@ public partial class Main : Control
 	private Label _volumeValue = null!;
 	private float _masterVolume = 0.8f;
 	private GameplayScreen _gameplay = null!;
+	private LevelEditorScreen _levelEditor = null!;
 	private ProgressionState _progress = ProgressionState.CreateNew();
 
 	private enum Screen
@@ -26,6 +27,7 @@ public partial class Main : Control
 		MainMenu,
 		Options,
 		StageSelect,
+		LevelEditor,
 		Play
 	}
 
@@ -71,6 +73,7 @@ public partial class Main : Control
 	private void ShowMainMenu()
 	{
 		CloseGameplay();
+		CloseLevelEditor();
 		_pageMargin.Visible = true;
 		_currentScreen = Screen.MainMenu;
 		ClearPage();
@@ -89,6 +92,10 @@ public partial class Main : Control
 		var options = CreateButton("OPTIONS");
 		options.Pressed += ShowOptions;
 		copy.AddChild(options);
+
+		var editor = CreateButton("LEVEL EDITOR (DEV)");
+		editor.Pressed += ShowLevelEditor;
+		copy.AddChild(editor);
 
 		var quit = CreateButton("QUIT");
 		quit.Pressed += () => GetTree().Quit();
@@ -199,15 +206,72 @@ public partial class Main : Control
 			return;
 		}
 
+		OpenGameplay(stage, null, false);
+	}
+
+	private void ShowLevelEditor()
+	{
+		CloseGameplay();
+		CloseLevelEditor();
+		_pageMargin.Visible = false;
+		_currentScreen = Screen.LevelEditor;
+		_levelEditor = new LevelEditorScreen();
+		_levelEditor.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+		_levelEditor.BackRequested += ShowMainMenu;
+		_levelEditor.PlaytestRequested += StartEditorPlaytest;
+		AddChild(_levelEditor);
+	}
+
+	private void StartEditorPlaytest(LevelDefinition level)
+	{
+		if (_levelEditor == null)
+		{
+			return;
+		}
+		_levelEditor.Visible = false;
+		_levelEditor.ProcessMode = ProcessModeEnum.Disabled;
+		OpenGameplay(WorldStageCatalog.FirstStage, level, true);
+	}
+
+	private void OpenGameplay(StageDefinition stage, LevelDefinition level, bool isPlaytest)
+	{
 		_currentScreen = Screen.Play;
 		_pageMargin.Visible = false;
 		_gameplay = new GameplayScreen();
-		_gameplay.Configure(stage);
+		_gameplay.Configure(stage, level, isPlaytest);
 		_gameplay.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		_gameplay.ReturnToMenuRequested += ShowMainMenu;
 		_gameplay.StageSelectRequested += ShowStageSelect;
+		if (isPlaytest)
+		{
+			_gameplay.ReturnToEditorRequested += ReturnToEditor;
+		}
 		_gameplay.StageCompleted += OnStageCompleted;
 		AddChild(_gameplay);
+	}
+
+	private void ReturnToEditor()
+	{
+		CloseGameplay();
+		if (_levelEditor == null)
+		{
+			ShowMainMenu();
+			return;
+		}
+		_levelEditor.Visible = true;
+		_levelEditor.ProcessMode = ProcessModeEnum.Inherit;
+		_currentScreen = Screen.LevelEditor;
+	}
+
+	private void CloseLevelEditor()
+	{
+		if (_levelEditor == null)
+		{
+			return;
+		}
+		RemoveChild(_levelEditor);
+		_levelEditor.QueueFree();
+		_levelEditor = null;
 	}
 
 	private void CloseGameplay()
