@@ -222,4 +222,55 @@ public class CourseRulesTests
 		Assert.False(progress.IsCompleted(firstStage));
 		Assert.False(progress.IsUnlocked(nextStage));
 	}
+
+	[Fact]
+	public void LevelDataRoundTripsThroughVersionedJson()
+	{
+		var level = LevelDefinition.CreateNew("test-small", "Small Test Course");
+		level.Elements.Add(new LevelElement { Type = "wall", X = -100, Y = 200, Width = 20, Height = 400 });
+		level.Elements.Add(new LevelElement { Type = "gate", X = 0, Y = 300, Width = 100, Height = 24 });
+
+		var json = level.ToJson();
+		Assert.True(LevelDefinition.TryFromJson(json, out var restored, out var errors), string.Join("; ", errors));
+		Assert.NotNull(restored);
+		Assert.Equal(level.Version, restored.Version);
+		Assert.Equal(level.Id, restored.Id);
+		Assert.Equal(level.Elements.Count, restored.Elements.Count);
+		Assert.Equal(level.Elements[1], restored.Elements[1]);
+	}
+
+	[Theory]
+	[InlineData("{\"version\":99}")]
+	[InlineData("not json")]
+	public void UnsupportedOrMalformedLevelDataIsRejected(string json)
+	{
+		Assert.False(LevelDefinition.TryFromJson(json, out _, out var errors));
+		Assert.NotEmpty(errors);
+	}
+
+	[Fact]
+	public void LevelValidationReportsMissingMarkersAndInvalidGeometry()
+	{
+		var level = new LevelDefinition { Id = "broken", Name = "Broken Course" };
+		level.Elements.Add(new LevelElement { Type = "wall", X = 0, Y = 0, Width = 0, Height = 20 });
+
+		var errors = level.Validate();
+
+		Assert.Contains(errors, error => error.Contains("start marker", StringComparison.OrdinalIgnoreCase));
+		Assert.Contains(errors, error => error.Contains("checkpoint marker", StringComparison.OrdinalIgnoreCase));
+		Assert.Contains(errors, error => error.Contains("finish marker", StringComparison.OrdinalIgnoreCase));
+		Assert.Contains(errors, error => error.Contains("wall", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Theory]
+	[InlineData("course-01")]
+	[InlineData("test-small")]
+	public void BundledLevelFilesAreValid(string levelId)
+	{
+		var path = Path.Combine(AppContext.BaseDirectory, "Levels", $"{levelId}.json");
+		var json = File.ReadAllText(path);
+
+		Assert.True(LevelDefinition.TryFromJson(json, out var level, out var errors), string.Join("; ", errors));
+		Assert.Equal(levelId, level!.Id);
+	}
 }

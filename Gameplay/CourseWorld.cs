@@ -29,20 +29,38 @@ public partial class CourseWorld : Node2D
 	private Vector2 _startPosition = new(0, 80);
 	private Vector2 _checkpointPosition = new(0, 1115);
 	private Vector2 _finishPosition = new(0, 1995);
+	private LevelDefinition _levelDefinition;
+	private float _levelLength = 2090;
+	private float _checkpointRadius = 36;
+	private float _finishRadius = 46;
 
 	public event Action HitWall;
 	public event Action CheckpointReached;
 	public event Action Finished;
 	public RotorPlayer Player => _player;
 
-	public void Configure(string levelDataId)
+	public void Configure(string levelDataId, LevelDefinition levelDefinition = null)
 	{
 		_levelDataId = levelDataId;
+		_levelDefinition = levelDefinition;
 	}
 
 	public override void _Ready()
 	{
-		if (_levelDataId == "course-02")
+		if (_levelDataId == "course-01" && _levelDefinition == null)
+		{
+			_levelDefinition = LevelFileStore.LoadById(_levelDataId, out var loadErrors);
+			foreach (var error in loadErrors)
+			{
+				GD.PushWarning(error);
+			}
+		}
+
+		if (_levelDefinition != null && _levelDefinition.Validate().Count == 0)
+		{
+			BuildDataCourse(_levelDefinition);
+		}
+		else if (_levelDataId == "course-02")
 		{
 			BuildBendingCourse();
 		}
@@ -62,7 +80,7 @@ public partial class CourseWorld : Node2D
 		_player = new RotorPlayer { Position = _startPosition };
 		_player.HitWall += () => HitWall?.Invoke();
 		AddChild(_player);
-		AddTrigger("Checkpoint", _checkpointPosition, 36, () =>
+		AddTrigger("Checkpoint", _checkpointPosition, _checkpointRadius, () =>
 		{
 			if (_checkpointActivated)
 			{
@@ -72,7 +90,7 @@ public partial class CourseWorld : Node2D
 			_player.SetCheckpoint(_checkpointPosition);
 			CheckpointReached?.Invoke();
 		});
-		AddTrigger("Finish", _finishPosition, 46, () => Finished?.Invoke());
+		AddTrigger("Finish", _finishPosition, _finishRadius, () => Finished?.Invoke());
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -119,6 +137,11 @@ public partial class CourseWorld : Node2D
 
 	public override void _Draw()
 	{
+		if (_levelDefinition != null && _levelDefinition.Validate().Count == 0)
+		{
+			DrawDataCourse(_levelDefinition);
+			return;
+		}
 		if (_isSidewaysCourse)
 		{
 			DrawSidewaysCourse();
@@ -144,8 +167,7 @@ public partial class CourseWorld : Node2D
 		}
 		DrawCircle(new Vector2(0, 1115), 36, new Color("#8de0b1", 0.25f));
 		DrawArc(new Vector2(0, 1115), 36, 0, Mathf.Tau, 48, new Color("#8de0b1"), 3);
-		DrawRect(new Rect2(-_activeCorridorHalfWidth, 1960, _activeCorridorHalfWidth * 2, 12), new Color("#8de0b1"));
-		DrawRect(new Rect2(-_activeCorridorHalfWidth, 2045, _activeCorridorHalfWidth * 2, 12), new Color("#8de0b1"));
+		DrawFinishMarker(_finishPosition, _finishRadius);
 		DrawPistons();
 	}
 
@@ -168,8 +190,7 @@ public partial class CourseWorld : Node2D
 		}
 		DrawCircle(_checkpointPosition, 36, new Color("#8de0b1", 0.25f));
 		DrawArc(_checkpointPosition, 36, 0, Mathf.Tau, 48, new Color("#8de0b1"), 3);
-		DrawRect(new Rect2(_finishPosition.X - 6, -_activeCorridorHalfWidth, 12,
-			_activeCorridorHalfWidth * 2), new Color("#8de0b1"));
+		DrawFinishMarker(_finishPosition, _finishRadius);
 	}
 
 	private void BuildCourse()
@@ -182,6 +203,94 @@ public partial class CourseWorld : Node2D
 		AddGate(1260, 95, 92);
 		AddGate(1580, -20, 118);
 		QueueRedraw();
+	}
+
+	private void BuildDataCourse(LevelDefinition level)
+	{
+		_activeCorridorHalfWidth = level.CorridorHalfWidth;
+		_levelLength = level.Length;
+		foreach (var element in level.Elements)
+		{
+			switch (element.Type)
+			{
+				case "wall":
+					AddWall(new Rect2(element.X - element.Width / 2, element.Y - element.Height / 2,
+						element.Width, element.Height), Mathf.DegToRad(element.RotationDegrees));
+					break;
+				case "gate":
+					AddGate(element.Y, element.X, element.Width, element.Height);
+					break;
+				case "diamond":
+					AddDiamond(new Vector2(element.X, element.Y), element.Width, Mathf.DegToRad(element.RotationDegrees));
+					break;
+				case "piston":
+					AddPiston(element.Y, element.Side, element.Phase, element.Frequency, element.Height,
+						false, false,
+						element.MinimumExtension, element.Width);
+					break;
+				case "start":
+					_startPosition = new Vector2(element.X, element.Y);
+					break;
+				case "checkpoint":
+					_checkpointPosition = new Vector2(element.X, element.Y);
+					_checkpointRadius = element.Width;
+					break;
+				case "finish":
+					_finishPosition = new Vector2(element.X, element.Y);
+					_finishRadius = element.Width;
+					break;
+			}
+		}
+		QueueRedraw();
+	}
+
+	private void DrawDataCourse(LevelDefinition level)
+	{
+		DrawRect(new Rect2(-_activeCorridorHalfWidth - 60, 0, (_activeCorridorHalfWidth + 60) * 2, _levelLength), new Color("#1b332e"));
+		DrawRect(new Rect2(-_activeCorridorHalfWidth, 0, _activeCorridorHalfWidth * 2, _levelLength), CourseColor);
+		foreach (var element in level.Elements)
+		{
+			switch (element.Type)
+			{
+				case "wall":
+					DrawSetTransform(new Vector2(element.X, element.Y), Mathf.DegToRad(element.RotationDegrees), Vector2.One);
+					DrawRect(new Rect2(-element.Width / 2, -element.Height / 2, element.Width, element.Height), WallColor);
+					DrawSetTransform(Vector2.Zero, 0, Vector2.One);
+					break;
+				case "gate":
+					var gate = new CourseGate(element.Y, element.X, element.Width, element.Height);
+					DrawGateWalls(gate, gate.CenterX - gate.Width / 2, gate.CenterX + gate.Width / 2);
+					DrawRect(new Rect2(gate.CenterX - gate.Width / 2, gate.Y - gate.Thickness / 2, gate.Width, gate.Thickness), new Color("#f4efd9"));
+					break;
+				case "diamond":
+					DrawSetTransform(new Vector2(element.X, element.Y), Mathf.DegToRad(element.RotationDegrees), Vector2.One);
+					var points = DiamondPoints(Vector2.Zero, element.Width);
+					DrawColoredPolygon(points, new Color("#e6c85e"));
+					DrawPolyline(points, new Color("#f4efd9"), 3, true);
+					DrawSetTransform(Vector2.Zero, 0, Vector2.One);
+					break;
+				case "piston":
+					break;
+				case "start":
+					DrawCircle(new Vector2(element.X, element.Y), element.Width, new Color("#8de0b1", 0.18f));
+					DrawArc(new Vector2(element.X, element.Y), element.Width, 0, Mathf.Tau, 32, new Color("#8de0b1"), 3);
+					break;
+				case "checkpoint":
+					DrawCircle(new Vector2(element.X, element.Y), element.Width, new Color("#8de0b1", 0.25f));
+					DrawArc(new Vector2(element.X, element.Y), element.Width, 0, Mathf.Tau, 48, new Color("#8de0b1"), 3);
+					break;
+				case "finish":
+					DrawFinishMarker(new Vector2(element.X, element.Y), element.Width);
+					break;
+			}
+		}
+		DrawPistons();
+	}
+
+	private void DrawFinishMarker(Vector2 position, float radius)
+	{
+		DrawCircle(position, radius, new Color("#8de0b1", 0.22f));
+		DrawArc(position, radius, 0, Mathf.Tau, 48, new Color("#8de0b1"), 3);
 	}
 
 	private void BuildSidewaysCourse()
@@ -218,7 +327,7 @@ public partial class CourseWorld : Node2D
 		for (var index = 0; index < pistonPositions.Length; index++)
 		{
 			var side = index % 2 == 0 ? -1f : 1f;
-			AddPiston(pistonPositions[index], side, index * 1.35f, frequency, maxExtension, advanced);
+			AddPiston(pistonPositions[index], side, index * 1.35f, frequency, maxExtension, false, advanced);
 		}
 		QueueRedraw();
 	}
@@ -232,11 +341,11 @@ public partial class CourseWorld : Node2D
 		AddWall(rectangle);
 	}
 
-	private void AddDiamond(Vector2 center)
+	private void AddDiamond(Vector2 center, float radius = 30, float rotation = 0)
 	{
-		const float radius = 30;
 		var body = new StaticBody2D { CollisionLayer = 2, CollisionMask = 0 };
 		body.Position = center;
+		body.Rotation = rotation;
 		body.AddChild(new CollisionShape2D
 		{
 			Shape = new ConvexPolygonShape2D
@@ -254,14 +363,16 @@ public partial class CourseWorld : Node2D
 		_diamondObstacles.Add(center);
 	}
 
-	private void AddPiston(float coursePosition, float side, float phase, float frequency, float maxExtension, bool advanced)
+	private void AddPiston(float coursePosition, float side, float phase, float frequency, float maxExtension, bool sideways,
+		bool advanced, float minimumExtension = -1, float thickness = 0)
 	{
 		var shape = new RectangleShape2D();
 		var body = new AnimatableBody2D { CollisionLayer = 2, CollisionMask = 0, SyncToPhysics = true };
 		body.AddChild(new CollisionShape2D { Shape = shape });
 		AddChild(body);
-		var piston = new PistonHazard(body, shape, coursePosition, side, _isSidewaysCourse, phase, frequency,
-			advanced ? 16f : 24f, maxExtension, advanced ? 74f : 90f);
+		var piston = new PistonHazard(body, shape, coursePosition, side, sideways, phase, frequency,
+			minimumExtension > 0 ? minimumExtension : advanced ? 16f : 24f, maxExtension,
+			thickness > 0 ? thickness : advanced ? 74f : 90f);
 		piston.Update(0, _activeCorridorHalfWidth);
 		_pistons.Add(piston);
 	}
@@ -382,27 +493,27 @@ public partial class CourseWorld : Node2D
 		}
 	}
 
-	private void AddGate(float y, float centerX, float width)
+	private void AddGate(float y, float centerX, float width, float thickness = GateThickness)
 	{
-		var gate = new CourseGate(y, centerX, width);
+		var gate = new CourseGate(y, centerX, width, thickness);
 		_gates.Add(gate);
 		var leftEdge = centerX - width / 2;
 		var rightEdge = centerX + width / 2;
 		var corridorLeft = centerX - _activeCorridorHalfWidth;
 		var corridorRight = centerX + _activeCorridorHalfWidth;
-		AddWall(new Rect2(corridorLeft, y - GateThickness / 2, leftEdge - corridorLeft, GateThickness));
-		AddWall(new Rect2(rightEdge, y - GateThickness / 2, corridorRight - rightEdge, GateThickness));
+		AddWall(new Rect2(corridorLeft, y - thickness / 2, leftEdge - corridorLeft, thickness));
+		AddWall(new Rect2(rightEdge, y - thickness / 2, corridorRight - rightEdge, thickness));
 	}
 
 	private void DrawGateWalls(CourseGate gate, float leftEdge, float rightEdge)
 	{
 		var corridorLeft = gate.CenterX - _activeCorridorHalfWidth;
 		var corridorRight = gate.CenterX + _activeCorridorHalfWidth;
-		DrawRect(new Rect2(corridorLeft, gate.Y - GateThickness / 2, leftEdge - corridorLeft, GateThickness), WallColor);
-		DrawRect(new Rect2(rightEdge, gate.Y - GateThickness / 2, corridorRight - rightEdge, GateThickness), WallColor);
+		DrawRect(new Rect2(corridorLeft, gate.Y - gate.Thickness / 2, leftEdge - corridorLeft, gate.Thickness), WallColor);
+		DrawRect(new Rect2(rightEdge, gate.Y - gate.Thickness / 2, corridorRight - rightEdge, gate.Thickness), WallColor);
 	}
 
-	private void AddWall(Rect2 rectangle)
+	private void AddWall(Rect2 rectangle, float rotation = 0)
 	{
 		if (rectangle.Size.X <= 0 || rectangle.Size.Y <= 0)
 		{
@@ -410,6 +521,7 @@ public partial class CourseWorld : Node2D
 		}
 		var body = new StaticBody2D { CollisionLayer = 2, CollisionMask = 0 };
 		body.Position = rectangle.Position + rectangle.Size / 2;
+		body.Rotation = rotation;
 		body.AddChild(new CollisionShape2D { Shape = new RectangleShape2D { Size = rectangle.Size } });
 		AddChild(body);
 	}
@@ -484,5 +596,5 @@ public partial class CourseWorld : Node2D
 		}
 	}
 
-	private sealed record CourseGate(float Y, float CenterX, float Width);
+	private sealed record CourseGate(float Y, float CenterX, float Width, float Thickness = GateThickness);
 }

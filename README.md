@@ -46,6 +46,14 @@ Do not add a `--path` override to the exported executable; exported builds may n
 
 To tune gameplay, edit [appsettings.json](appsettings.json). `gameplay.collision_recoil_radians` controls collision recoil (default `0.7` radians, clamped to 0 through pi). `gameplay.rotor_half_length` controls the rotor arm's center-to-tip length in pixels (default `51`, clamped to 10 through 150). Both settings are loaded at startup and included in Windows exports.
 
+## Level editor and data
+
+Choose **LEVEL EDITOR (DEV)** from the main menu. The editor can create, open, validate, playtest, and save levels. Bundled examples live in `Levels/`; user-authored levels are saved to `user://levels/<id>.json`. **SAVE** writes the current level ID, while **SAVE AS** uses the ID field as a new destination. Playtest returns to the same editor state without saving or recording stage progression.
+
+Level files are versioned JSON (`version: 1`) with a level `id`, display `name`, `corridorHalfWidth`, `length`, and an `elements` array. Elements use `type`, center-position `x`/`y`, and `width`/`height`; wall rotation and diamond radius are supported, while gates use `width` as the opening width. Marker `width` is its trigger radius. Supported types are `wall`, `gate`, `diamond`, `piston`, `start`, `checkpoint`, and `finish`. A level must have exactly one of each marker. Unknown types, malformed JSON, unsupported versions, and invalid dimensions are rejected before save or playtest.
+
+The first progression stage keeps its `course-01` ID and now loads `Levels/course-01.json`. A valid file at `user://levels/course-01.json` overrides the bundled level; if that override is invalid, the bundled copy is used. Other progression stages continue using their existing runtime builders.
+
 This is a Godot .NET/C# project, so `package.json` is not its build or dependency manifest. Use the solution and project files for .NET, and Godot's project and export configuration for engine tasks. Add `package.json` only if a separate Node.js tool is introduced.
 
 For future Copilot build, test, export, or run tasks, invoke `/godot-dotnet-build-test-run` or read the [workspace skill](.github/skills/godot-dotnet-build-test-run/SKILL.md).

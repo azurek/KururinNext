@@ -19,5 +19,7 @@
     <Compile Include="..\Gameplay\LevelRunState.cs" Link="LevelRunState.cs" />
     <Compile Include="..\Gameplay\GameplaySettings.cs" Link="GameplaySettings.cs" />
     <Compile Include="..\Gameplay\Progression.cs" Link="Progression.cs" />
+    <Compile Include="..\Gameplay\LevelData.cs" Link="LevelData.cs" />
+    <None Include="..\Levels\*.json" Link="Levels\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
