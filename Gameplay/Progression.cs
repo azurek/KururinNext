@@ -24,7 +24,10 @@ public static class WorldStageCatalog
 		new WorldDefinition("world-01", "THE WINDING WALK", Array.AsReadOnly(new[]
 		{
 			new StageDefinition(FirstStageId, 1, "THE WINDING WALK", "course-01", null, true),
-			new StageDefinition("world-01-stage-02", 2, "THE LONGER TURN", "course-02", FirstStageId, true)
+			new StageDefinition("world-01-stage-02", 2, "THE LONGER TURN", "course-02", FirstStageId, true),
+			new StageDefinition("world-01-stage-03", 3, "THE SIDEWAYS SHIFT", "course-03", "world-01-stage-02", true),
+			new StageDefinition("world-01-stage-04", 4, "THE PULSE CHAMBER", "course-04", "world-01-stage-03", true),
+			new StageDefinition("world-01-stage-05", 5, "THE LAST PRESS", "course-05", "world-01-stage-04", true)
 		}))
 	});
 

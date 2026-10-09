@@ -20,6 +20,23 @@ public class CourseRulesTests
 		Assert.Equal(GameplaySettings.DefaultCollisionRecoilRadians, GameplaySettings.ParseCollisionRecoilRadians("{\"gameplay\":[]}"));
 	}
 
+	[Theory]
+	[InlineData("{\"gameplay\":{\"rotor_half_length\":64}}", 64f)]
+	[InlineData("{\"gameplay\":{\"rotor_half_length\":-5}}", 10f)]
+	[InlineData("{\"gameplay\":{\"rotor_half_length\":200}}", 150f)]
+	public void RotorHalfLengthLoadsAndClampsConfiguration(string json, float expected)
+	{
+		Assert.Equal(expected, GameplaySettings.ParseRotorHalfLength(json));
+	}
+
+	[Fact]
+	public void InvalidRotorHalfLengthConfigurationUsesDefault()
+	{
+		Assert.Equal(GameplaySettings.DefaultRotorHalfLength, GameplaySettings.ParseRotorHalfLength("not json"));
+		Assert.Equal(GameplaySettings.DefaultRotorHalfLength, GameplaySettings.ParseRotorHalfLength("{}"));
+		Assert.Equal(GameplaySettings.DefaultRotorHalfLength, GameplaySettings.ParseRotorHalfLength("{\"gameplay\":[]}"));
+	}
+
 	[Fact]
 	public void RunStartsWithThreeHeartsAndAdvancesTimer()
 	{
@@ -166,6 +183,30 @@ public class CourseRulesTests
 		Assert.True(progress.IsUnlocked(secondStage));
 		Assert.True(secondStage.IsImplemented);
 		Assert.Equal("course-02", secondStage.LevelDataId);
+	}
+
+	[Fact]
+	public void AddedStagesUnlockInOrder()
+	{
+		var progress = ProgressionState.CreateNew();
+		var firstStage = WorldStageCatalog.FirstStage;
+		var secondStage = WorldStageCatalog.FindStage("world-01-stage-02")!;
+		var sidewaysStage = WorldStageCatalog.FindStage("world-01-stage-03")!;
+		var pistonStage = WorldStageCatalog.FindStage("world-01-stage-04")!;
+		var finalStage = WorldStageCatalog.FindStage("world-01-stage-05")!;
+
+		Assert.False(progress.IsUnlocked(sidewaysStage));
+		Assert.True(progress.CompleteStage(firstStage.Id));
+		Assert.True(progress.CompleteStage(secondStage.Id));
+		Assert.True(progress.IsUnlocked(sidewaysStage));
+		Assert.False(progress.IsUnlocked(pistonStage));
+		Assert.True(progress.CompleteStage(sidewaysStage.Id));
+		Assert.True(progress.IsUnlocked(pistonStage));
+		Assert.True(progress.CompleteStage(pistonStage.Id));
+		Assert.True(progress.IsUnlocked(finalStage));
+		Assert.Equal("course-03", sidewaysStage.LevelDataId);
+		Assert.Equal("course-04", pistonStage.LevelDataId);
+		Assert.Equal("course-05", finalStage.LevelDataId);
 	}
 
 	[Theory]

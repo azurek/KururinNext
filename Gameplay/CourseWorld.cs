@@ -7,10 +7,15 @@ public partial class CourseWorld : Node2D
 {
 	private const float CorridorHalfWidth = 240f;
 	private const float BendingCorridorHalfWidth = 90f;
+	private const float ChallengeCorridorHalfWidth = 155f;
 	private const float GateThickness = 24f;
+	private const float SidewaysCourseLength = 2500f;
 	private static readonly Color CourseColor = new("#304a41");
 	private static readonly Color WallColor = new("#f08a68");
 	private readonly List<CourseGate> _gates = new();
+	private readonly List<PistonHazard> _pistons = new();
+	private readonly List<Rect2> _sidewaysObstacles = new();
+	private readonly List<Vector2> _diamondObstacles = new();
 	private readonly List<Vector2> _trackCenterline = new();
 	private readonly List<Vector2> _leftBoundary = new();
 	private readonly List<Vector2> _rightBoundary = new();
@@ -18,7 +23,9 @@ public partial class CourseWorld : Node2D
 	private string _levelDataId = "course-01";
 	private float _activeCorridorHalfWidth = CorridorHalfWidth;
 	private bool _isBendingCourse;
+	private bool _isSidewaysCourse;
 	private bool _checkpointActivated;
+	private float _hazardTime;
 	private Vector2 _startPosition = new(0, 80);
 	private Vector2 _checkpointPosition = new(0, 1115);
 	private Vector2 _finishPosition = new(0, 1995);
@@ -38,6 +45,14 @@ public partial class CourseWorld : Node2D
 		if (_levelDataId == "course-02")
 		{
 			BuildBendingCourse();
+		}
+		else if (_levelDataId == "course-03")
+		{
+			BuildSidewaysCourse();
+		}
+		else if (_levelDataId == "course-04" || _levelDataId == "course-05")
+		{
+			BuildPistonCourse(_levelDataId == "course-05");
 		}
 		else
 		{
@@ -60,8 +75,28 @@ public partial class CourseWorld : Node2D
 		AddTrigger("Finish", _finishPosition, 46, () => Finished?.Invoke());
 	}
 
+	public override void _PhysicsProcess(double delta)
+	{
+		if (_pistons.Count == 0)
+		{
+			return;
+		}
+
+		_hazardTime += (float)delta;
+		foreach (var piston in _pistons)
+		{
+			piston.Update(_hazardTime, _activeCorridorHalfWidth);
+		}
+		QueueRedraw();
+	}
+
 	public string GetAlignmentStatus()
 	{
+		if (_isSidewaysCourse)
+		{
+			return "DODGE THE DIAMONDS";
+		}
+
 		var gate = _gates.FirstOrDefault(candidate => candidate.Y + GateThickness > _player.GlobalPosition.Y - 50);
 		if (gate == null)
 		{
@@ -84,16 +119,22 @@ public partial class CourseWorld : Node2D
 
 	public override void _Draw()
 	{
+		if (_isSidewaysCourse)
+		{
+			DrawSidewaysCourse();
+			return;
+		}
+
 		if (_isBendingCourse)
 		{
 			DrawBendingCourse();
 			return;
 		}
 
-		DrawRect(new Rect2(-300, 0, 600, 2090), new Color("#1b332e"));
-		DrawRect(new Rect2(-CorridorHalfWidth, 0, CorridorHalfWidth * 2, 2090), CourseColor);
-		DrawRect(new Rect2(-260, 0, 20, 2090), WallColor);
-		DrawRect(new Rect2(240, 0, 20, 2090), WallColor);
+		DrawRect(new Rect2(-_activeCorridorHalfWidth - 60, 0, (_activeCorridorHalfWidth + 60) * 2, 2090), new Color("#1b332e"));
+		DrawRect(new Rect2(-_activeCorridorHalfWidth, 0, _activeCorridorHalfWidth * 2, 2090), CourseColor);
+		DrawRect(new Rect2(-_activeCorridorHalfWidth - 20, 0, 20, 2090), WallColor);
+		DrawRect(new Rect2(_activeCorridorHalfWidth, 0, 20, 2090), WallColor);
 		foreach (var gate in _gates)
 		{
 			var leftEdge = gate.CenterX - gate.Width / 2;
@@ -103,8 +144,32 @@ public partial class CourseWorld : Node2D
 		}
 		DrawCircle(new Vector2(0, 1115), 36, new Color("#8de0b1", 0.25f));
 		DrawArc(new Vector2(0, 1115), 36, 0, Mathf.Tau, 48, new Color("#8de0b1"), 3);
-		DrawRect(new Rect2(-240, 1960, 480, 12), new Color("#8de0b1"));
-		DrawRect(new Rect2(-240, 2045, 480, 12), new Color("#8de0b1"));
+		DrawRect(new Rect2(-_activeCorridorHalfWidth, 1960, _activeCorridorHalfWidth * 2, 12), new Color("#8de0b1"));
+		DrawRect(new Rect2(-_activeCorridorHalfWidth, 2045, _activeCorridorHalfWidth * 2, 12), new Color("#8de0b1"));
+		DrawPistons();
+	}
+
+	private void DrawSidewaysCourse()
+	{
+		DrawRect(new Rect2(-120, -_activeCorridorHalfWidth - 120,
+			SidewaysCourseLength + 240, (_activeCorridorHalfWidth + 120) * 2), new Color("#1b332e"));
+		DrawRect(new Rect2(0, -_activeCorridorHalfWidth, SidewaysCourseLength, _activeCorridorHalfWidth * 2), CourseColor);
+		DrawRect(new Rect2(0, -_activeCorridorHalfWidth - 20, SidewaysCourseLength, 20), WallColor);
+		DrawRect(new Rect2(0, _activeCorridorHalfWidth, SidewaysCourseLength, 20), WallColor);
+		foreach (var obstacle in _sidewaysObstacles)
+		{
+			DrawRect(obstacle, WallColor);
+		}
+		foreach (var center in _diamondObstacles)
+		{
+			var points = DiamondPoints(center, 30);
+			DrawColoredPolygon(points, new Color("#e6c85e"));
+			DrawPolyline(points, new Color("#f4efd9"), 3, true);
+		}
+		DrawCircle(_checkpointPosition, 36, new Color("#8de0b1", 0.25f));
+		DrawArc(_checkpointPosition, 36, 0, Mathf.Tau, 48, new Color("#8de0b1"), 3);
+		DrawRect(new Rect2(_finishPosition.X - 6, -_activeCorridorHalfWidth, 12,
+			_activeCorridorHalfWidth * 2), new Color("#8de0b1"));
 	}
 
 	private void BuildCourse()
@@ -118,6 +183,105 @@ public partial class CourseWorld : Node2D
 		AddGate(1580, -20, 118);
 		QueueRedraw();
 	}
+
+	private void BuildSidewaysCourse()
+	{
+		_isSidewaysCourse = true;
+		_activeCorridorHalfWidth = ChallengeCorridorHalfWidth;
+		_startPosition = new Vector2(80, 0);
+		_checkpointPosition = new Vector2(1490, 0);
+		_finishPosition = new Vector2(2420, 0);
+		AddWall(new Rect2(0, -_activeCorridorHalfWidth - 20, SidewaysCourseLength, 20));
+		AddWall(new Rect2(0, _activeCorridorHalfWidth, SidewaysCourseLength, 20));
+		AddSidewaysProtrusion(380, true, 120, 230);
+		AddSidewaysProtrusion(790, false, 120, 230);
+		AddSidewaysProtrusion(1200, true, 120, 230);
+		AddSidewaysProtrusion(1590, false, 120, 230);
+		AddSidewaysProtrusion(2000, true, 120, 230);
+		AddDiamond(new Vector2(670, 85));
+		AddDiamond(new Vector2(1080, -85));
+		AddDiamond(new Vector2(1870, -85));
+		AddDiamond(new Vector2(2310, 85));
+		QueueRedraw();
+	}
+
+	private void BuildPistonCourse(bool advanced)
+	{
+		_activeCorridorHalfWidth = ChallengeCorridorHalfWidth;
+		AddWall(new Rect2(-_activeCorridorHalfWidth - 20, 0, 20, 2050));
+		AddWall(new Rect2(_activeCorridorHalfWidth, 0, 20, 2050));
+		var frequency = advanced ? 1.65f : 1.2f;
+		var maxExtension = advanced ? 290f : 260f;
+		var pistonPositions = advanced
+			? new[] { 300f, 540f, 790f, 1030f, 1270f, 1510f, 1750f, 1900f }
+			: new[] { 390f, 720f, 1050f, 1380f, 1710f, 1900f };
+		for (var index = 0; index < pistonPositions.Length; index++)
+		{
+			var side = index % 2 == 0 ? -1f : 1f;
+			AddPiston(pistonPositions[index], side, index * 1.35f, frequency, maxExtension, advanced);
+		}
+		QueueRedraw();
+	}
+
+	private void AddSidewaysProtrusion(float x, bool fromTop, float depth, float length)
+	{
+		var rectangle = fromTop
+			? new Rect2(x, -CorridorHalfWidth, length, depth)
+			: new Rect2(x, CorridorHalfWidth - depth, length, depth);
+		_sidewaysObstacles.Add(rectangle);
+		AddWall(rectangle);
+	}
+
+	private void AddDiamond(Vector2 center)
+	{
+		const float radius = 30;
+		var body = new StaticBody2D { CollisionLayer = 2, CollisionMask = 0 };
+		body.Position = center;
+		body.AddChild(new CollisionShape2D
+		{
+			Shape = new ConvexPolygonShape2D
+			{
+				Points = new[]
+				{
+					new Vector2(0, -radius),
+					new Vector2(radius, 0),
+					new Vector2(0, radius),
+					new Vector2(-radius, 0)
+				}
+			}
+		});
+		AddChild(body);
+		_diamondObstacles.Add(center);
+	}
+
+	private void AddPiston(float coursePosition, float side, float phase, float frequency, float maxExtension, bool advanced)
+	{
+		var shape = new RectangleShape2D();
+		var body = new AnimatableBody2D { CollisionLayer = 2, CollisionMask = 0, SyncToPhysics = true };
+		body.AddChild(new CollisionShape2D { Shape = shape });
+		AddChild(body);
+		var piston = new PistonHazard(body, shape, coursePosition, side, _isSidewaysCourse, phase, frequency,
+			advanced ? 16f : 24f, maxExtension, advanced ? 74f : 90f);
+		piston.Update(0, _activeCorridorHalfWidth);
+		_pistons.Add(piston);
+	}
+
+	private void DrawPistons()
+	{
+		foreach (var piston in _pistons)
+		{
+			DrawRect(piston.Bounds, WallColor);
+			DrawRect(piston.TipBounds, new Color("#e6c85e"));
+		}
+	}
+
+	private static Vector2[] DiamondPoints(Vector2 center, float radius) => new[]
+	{
+		center + new Vector2(0, -radius),
+		center + new Vector2(radius, 0),
+		center + new Vector2(0, radius),
+		center + new Vector2(-radius, 0)
+	};
 
 	private void BuildBendingCourse()
 	{
@@ -263,6 +427,61 @@ public partial class CourseWorld : Node2D
 			}
 		};
 		AddChild(area);
+	}
+
+	private sealed class PistonHazard
+	{
+		private readonly AnimatableBody2D _body;
+		private readonly RectangleShape2D _shape;
+		private readonly float _coursePosition;
+		private readonly float _side;
+		private readonly bool _isSideways;
+		private readonly float _phase;
+		private readonly float _frequency;
+		private readonly float _minimumExtension;
+		private readonly float _maximumExtension;
+		private readonly float _thickness;
+
+		public Rect2 Bounds { get; private set; }
+		public Rect2 TipBounds { get; private set; }
+
+		public PistonHazard(AnimatableBody2D body, RectangleShape2D shape, float coursePosition, float side,
+			bool isSideways, float phase, float frequency, float minimumExtension, float maximumExtension, float thickness)
+		{
+			_body = body;
+			_shape = shape;
+			_coursePosition = coursePosition;
+			_side = side;
+			_isSideways = isSideways;
+			_phase = phase;
+			_frequency = frequency;
+			_minimumExtension = minimumExtension;
+			_maximumExtension = maximumExtension;
+			_thickness = thickness;
+		}
+
+		public void Update(float time, float corridorHalfWidth)
+		{
+			var cycle = (Mathf.Sin(time * _frequency + _phase) + 1) / 2;
+			var extension = Mathf.Lerp(_minimumExtension, _maximumExtension, cycle);
+			if (_isSideways)
+			{
+				_shape.Size = new Vector2(_thickness, extension);
+				_body.Position = new Vector2(_coursePosition, _side * (corridorHalfWidth - extension / 2));
+				Bounds = new Rect2(_coursePosition - _thickness / 2,
+					_side < 0 ? -corridorHalfWidth : corridorHalfWidth - extension, _thickness, extension);
+				TipBounds = new Rect2(_coursePosition - _thickness / 2,
+					_side < 0 ? -corridorHalfWidth + extension - 8 : corridorHalfWidth - extension, _thickness, 8);
+				return;
+			}
+
+			_shape.Size = new Vector2(extension, _thickness);
+			_body.Position = new Vector2(_side * (corridorHalfWidth - extension / 2), _coursePosition);
+			Bounds = new Rect2(_side < 0 ? -corridorHalfWidth : corridorHalfWidth - extension,
+				_coursePosition - _thickness / 2, extension, _thickness);
+			TipBounds = new Rect2(_side < 0 ? -corridorHalfWidth + extension - 8 : corridorHalfWidth - extension,
+				_coursePosition - _thickness / 2, 8, _thickness);
+		}
 	}
 
 	private sealed record CourseGate(float Y, float CenterX, float Width);
