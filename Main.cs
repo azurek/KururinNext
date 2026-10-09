@@ -3,6 +3,7 @@ using Godot;
 public partial class Main : Control
 {
 	private const string SettingsPath = "user://kururinnext.cfg";
+	private const string ProgressPath = "user://kururinnext_progress.json";
 	private const string AudioSection = "audio";
 	private const string MasterVolumeKey = "master_volume";
 	private static readonly Color Ink = new("#142a28");
@@ -18,17 +19,20 @@ public partial class Main : Control
 	private Label _volumeValue = null!;
 	private float _masterVolume = 0.8f;
 	private GameplayScreen _gameplay = null!;
+	private ProgressionState _progress = ProgressionState.CreateNew();
 
 	private enum Screen
 	{
 		MainMenu,
 		Options,
+		StageSelect,
 		Play
 	}
 
 	public override void _Ready()
 	{
 		LoadSettings();
+		LoadProgress();
 		ApplyMasterVolume();
 
 		const string gameplaySettingsPath = "res://appsettings.json";
@@ -57,7 +61,7 @@ public partial class Main : Control
 			return;
 		}
 
-		if (_currentScreen == Screen.Options)
+		if (_currentScreen is Screen.Options or Screen.StageSelect)
 		{
 			ShowMainMenu();
 			GetViewport().SetInputAsHandled();
@@ -66,12 +70,7 @@ public partial class Main : Control
 
 	private void ShowMainMenu()
 	{
-		if (_gameplay != null)
-		{
-			RemoveChild(_gameplay);
-			_gameplay.QueueFree();
-			_gameplay = null;
-		}
+		CloseGameplay();
 		_pageMargin.Visible = true;
 		_currentScreen = Screen.MainMenu;
 		ClearPage();
@@ -83,9 +82,9 @@ public partial class Main : Control
 		AddLabel(copy, "FIND YOUR WAY THROUGH THE SPIN.", 14, Muted);
 		AddSpacer(copy, 16);
 
-		var play = CreateButton("PLAY", true);
-		play.Pressed += StartGameplay;
-		copy.AddChild(play);
+		var stages = CreateButton("STAGE SELECT", true);
+		stages.Pressed += ShowStageSelect;
+		copy.AddChild(stages);
 
 		var options = CreateButton("OPTIONS");
 		options.Pressed += ShowOptions;
@@ -97,7 +96,53 @@ public partial class Main : Control
 
 		AddArtwork(body);
 		AddFooter("ARROWS / WASD  MOVE     ENTER  SELECT     ESC  BACK");
-		play.GrabFocus();
+		stages.GrabFocus();
+	}
+
+	private void ShowStageSelect()
+	{
+		CloseGameplay();
+		_pageMargin.Visible = true;
+		_currentScreen = Screen.StageSelect;
+		ClearPage();
+		AddHeader("SELECT STAGE");
+
+		var body = CreateBody();
+		var copy = CreateCopyColumn(body);
+		AddTitle(copy, "WORLDS", 36);
+		Button firstPlayableStage = null;
+		foreach (var world in WorldStageCatalog.Worlds)
+		{
+			AddLabel(copy, world.DisplayName, 13, Mint);
+			foreach (var stage in world.Stages)
+			{
+				var unlocked = _progress.IsUnlocked(stage);
+				var completed = _progress.IsCompleted(stage);
+				var status = completed ? "COMPLETED" : unlocked ? "UNLOCKED" : "LOCKED";
+				if (unlocked && !stage.IsImplemented)
+				{
+					status = "UNLOCKED · IN DEVELOPMENT";
+				}
+
+				var button = CreateButton($"{stage.Number:00}  {stage.DisplayName}    {status}");
+				button.CustomMinimumSize = new Vector2(380, 46);
+				button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+				button.Disabled = !unlocked || !stage.IsImplemented;
+				button.Pressed += () => StartGameplay(stage);
+				copy.AddChild(button);
+				if (!button.Disabled && firstPlayableStage == null)
+				{
+					firstPlayableStage = button;
+				}
+			}
+		}
+
+		var back = CreateButton("BACK TO MENU");
+		back.Pressed += ShowMainMenu;
+		copy.AddChild(back);
+		AddArtwork(body);
+		AddFooter("ENTER  SELECT     ESC  BACK");
+		(firstPlayableStage ?? back).GrabFocus();
 	}
 
 	private void ShowOptions()
@@ -147,14 +192,62 @@ public partial class Main : Control
 		_volumeSlider.GrabFocus();
 	}
 
-	private void StartGameplay()
+	private void StartGameplay(StageDefinition stage)
 	{
+		if (!stage.IsImplemented || !_progress.IsUnlocked(stage))
+		{
+			return;
+		}
+
 		_currentScreen = Screen.Play;
 		_pageMargin.Visible = false;
 		_gameplay = new GameplayScreen();
+		_gameplay.Configure(stage);
 		_gameplay.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		_gameplay.ReturnToMenuRequested += ShowMainMenu;
+		_gameplay.StageSelectRequested += ShowStageSelect;
+		_gameplay.StageCompleted += OnStageCompleted;
 		AddChild(_gameplay);
+	}
+
+	private void CloseGameplay()
+	{
+		if (_gameplay == null)
+		{
+			return;
+		}
+
+		RemoveChild(_gameplay);
+		_gameplay.QueueFree();
+		_gameplay = null;
+	}
+
+	private void OnStageCompleted(string stageId)
+	{
+		if (_progress.CompleteStage(stageId))
+		{
+			SaveProgress();
+		}
+	}
+
+	private void LoadProgress()
+	{
+		_progress = FileAccess.FileExists(ProgressPath)
+			? ProgressionState.Load(FileAccess.GetFileAsString(ProgressPath))
+			: ProgressionState.CreateNew();
+	}
+
+	private void SaveProgress()
+	{
+		var file = FileAccess.Open(ProgressPath, FileAccess.ModeFlags.Write);
+		if (file == null)
+		{
+			GD.PushWarning($"Could not save stage progress: {FileAccess.GetOpenError()}");
+			return;
+		}
+
+		file.StoreString(_progress.ToJson());
+		file.Close();
 	}
 
 	private void ClearPage()

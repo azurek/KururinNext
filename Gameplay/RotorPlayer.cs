@@ -6,7 +6,6 @@ public partial class RotorPlayer : CharacterBody2D
 	private const float MoveSpeed = 235f;
 	private const float AutomaticSpinSpeed = 2.4f;
 	private const float SpinAdjustmentSpeed = 0.8f;
-	private const float RotorHalfLengthValue = 51f;
 	private const float RotorRadiusValue = 7f;
 	private const float HitLockSeconds = 0.45f;
 	private const float CollisionRecoverySpeed = 110f;
@@ -23,7 +22,7 @@ public partial class RotorPlayer : CharacterBody2D
 
 	public event Action HitWall;
 	public float RotorAngle => _rotor.Rotation;
-	public float RotorHalfLength => RotorHalfLengthValue;
+	public float RotorHalfLength => GameplaySettings.RotorHalfLength;
 	public float RotorRadius => RotorRadiusValue;
 	public Vector2 Checkpoint => _checkpoint;
 
@@ -35,7 +34,7 @@ public partial class RotorPlayer : CharacterBody2D
 		AddChild(new CollisionShape2D { Shape = new CircleShape2D { Radius = 13 } });
 		_rotorCollision.Shape = new CapsuleShape2D
 		{
-			Height = (RotorHalfLengthValue * 2) + (RotorRadiusValue * 2),
+			Height = (RotorHalfLength * 2) + (RotorRadiusValue * 2),
 			Radius = RotorRadiusValue
 		};
 		AddChild(_rotorCollision);
@@ -147,10 +146,11 @@ public partial class RotorPlayer : CharacterBody2D
 		public override void _Draw()
 		{
 			var color = _hit ? new Color("#ff5d5d") : new Color("#8de0b1");
-			DrawLine(new Vector2(0, -RotorHalfLengthValue), new Vector2(0, RotorHalfLengthValue), color, RotorRadiusValue * 2, true);
-			DrawCircle(new Vector2(0, -RotorHalfLengthValue), RotorRadiusValue, new Color("#f4efd9"));
-			DrawCircle(new Vector2(0, RotorHalfLengthValue), RotorRadiusValue, new Color("#f4efd9"));
-			DrawCircle(new Vector2(0, -RotorHalfLengthValue + 12), 3.5f, new Color("#142a28"));
+			var halfLength = GameplaySettings.RotorHalfLength;
+			DrawLine(new Vector2(0, -halfLength), new Vector2(0, halfLength), color, RotorRadiusValue * 2, true);
+			DrawCircle(new Vector2(0, -halfLength), RotorRadiusValue, new Color("#f4efd9"));
+			DrawCircle(new Vector2(0, halfLength), RotorRadiusValue, new Color("#f4efd9"));
+			DrawCircle(new Vector2(0, -halfLength + 12), 3.5f, new Color("#142a28"));
 		}
 	}
 

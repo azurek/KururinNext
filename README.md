@@ -44,7 +44,7 @@ For a short headless smoke check of the exported executable:
 
 Do not add a `--path` override to the exported executable; exported builds may not support project-path overrides. Move with WASD/arrows or a controller stick/D-pad, adjust continuous rotor spin with Q/E or the controller bumpers, retry with R/controller Y, and pause with Escape/P/controller Start. These bindings are configurable in Project Settings > Input Map.
 
-To tune collision recoil, edit `gameplay.collision_recoil_radians` in [appsettings.json](appsettings.json). The default is `0.7` radians (about 40 degrees); the value is clamped to 0 through pi, loaded at startup, and included in Windows exports.
+To tune gameplay, edit [appsettings.json](appsettings.json). `gameplay.collision_recoil_radians` controls collision recoil (default `0.7` radians, clamped to 0 through pi). `gameplay.rotor_half_length` controls the rotor arm's center-to-tip length in pixels (default `51`, clamped to 10 through 150). Both settings are loaded at startup and included in Windows exports.
 
 This is a Godot .NET/C# project, so `package.json` is not its build or dependency manifest. Use the solution and project files for .NET, and Godot's project and export configuration for engine tasks. Add `package.json` only if a separate Node.js tool is introduced.
 

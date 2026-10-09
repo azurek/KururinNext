@@ -18,5 +18,6 @@
     <Compile Include="..\Gameplay\CourseRules.cs" Link="CourseRules.cs" />
     <Compile Include="..\Gameplay\LevelRunState.cs" Link="LevelRunState.cs" />
     <Compile Include="..\Gameplay\GameplaySettings.cs" Link="GameplaySettings.cs" />
+    <Compile Include="..\Gameplay\Progression.cs" Link="Progression.cs" />
   </ItemGroup>
 </Project>

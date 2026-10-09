@@ -20,14 +20,23 @@ public partial class GameplayScreen : Control
 	private bool _failurePending;
 	private float _failureDelay;
 	private float _messageTime;
+	private StageDefinition _stage = WorldStageCatalog.FirstStage;
 
 	public event Action ReturnToMenuRequested;
+	public event Action StageSelectRequested;
+	public event Action<string> StageCompleted;
+
+	public void Configure(StageDefinition stage)
+	{
+		_stage = stage;
+	}
 
 	public override void _Ready()
 	{
 		ProcessMode = ProcessModeEnum.Always;
 		MouseFilter = MouseFilterEnum.Stop;
 		_world = new CourseWorld { Name = "CourseWorld", ProcessMode = ProcessModeEnum.Pausable };
+		_world.Configure(_stage.LevelDataId);
 		AddChild(_world);
 		_world.HitWall += OnHitWall;
 		_world.CheckpointReached += OnCheckpointReached;
@@ -99,7 +108,7 @@ public partial class GameplayScreen : Control
 		root.MouseFilter = MouseFilterEnum.Ignore;
 		layer.AddChild(root);
 
-		var title = MakeLabel("01 / THE WINDING WALK", 14, Mint);
+		var title = MakeLabel($"{_stage.Number:00} / {_stage.DisplayName}", 14, Mint);
 		title.Position = new Vector2(28, 20);
 		title.Size = new Vector2(520, 24);
 		root.AddChild(title);
@@ -184,6 +193,7 @@ public partial class GameplayScreen : Control
 		}
 		_runState.Complete();
 		_finished = true;
+		StageCompleted?.Invoke(_stage.Id);
 		_paused = true;
 		GetTree().Paused = true;
 		ShowOverlay("COURSE COMPLETE", $"Final time: {FormatTime(_runState.ElapsedSeconds)}", MakeFinishButtons);
@@ -272,7 +282,7 @@ public partial class GameplayScreen : Control
 
 	private void MakeFinishButtons(VBoxContainer content)
 	{
-		var returnButton = AddOverlayButton(content, "RETURN TO MENU", ReturnToMenu);
+		var returnButton = AddOverlayButton(content, "STAGE SELECT", ReturnToStageSelect);
 		returnButton.GrabFocus();
 	}
 
@@ -313,6 +323,12 @@ public partial class GameplayScreen : Control
 	{
 		GetTree().Paused = false;
 		ReturnToMenuRequested?.Invoke();
+	}
+
+	private void ReturnToStageSelect()
+	{
+		GetTree().Paused = false;
+		StageSelectRequested?.Invoke();
 	}
 
 	private void UpdateRunHud()
